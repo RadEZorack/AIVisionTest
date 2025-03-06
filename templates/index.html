@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>WebRTC AI Vision</title>
+</head>
+<body>
+    <h1>AI Vision Streaming</h1>
+    <video id="localVideo" autoplay playsinline></video>
+
+    <script>
+        let pc = new RTCPeerConnection({
+            iceServers: [{ urls: "stun:stun.l.google.com:19302" }],  // Use Google's STUN server
+        });
+    
+        async function startWebRTC() {
+            let ws = new WebSocket("ws://localhost:8000/ws");
+    
+            ws.onopen = async () => {
+                console.log("📡 WebSocket Connected!");
+    
+                let stream = await navigator.mediaDevices.getUserMedia({
+                    video: { width: 320, height: 240, frameRate: 5 }
+                });
+    
+                document.getElementById("localVideo").srcObject = stream;
+                console.log("🎥 Video stream started!");
+    
+                stream.getTracks().forEach(track => {
+                    console.log(`🎬 Adding track: ${track.kind}`);
+                    pc.addTrack(track, stream);
+                });
+    
+                let offer = await pc.createOffer();
+                await pc.setLocalDescription(offer);
+                ws.send(JSON.stringify({ sdp: offer.sdp, type: offer.type }));
+    
+                // Handle ICE candidates received from the server
+                ws.onmessage = async (event) => {
+                    let response = JSON.parse(event.data);
+                    if (response.sdp) {
+                        await pc.setRemoteDescription(new RTCSessionDescription(response));
+                        console.log("✅ WebRTC Video Streaming Connected!");
+                    } else if (response.candidate) {
+                        await pc.addIceCandidate(new RTCIceCandidate({ candidate: response.candidate }));
+                        console.log("❄️ ICE Candidate Added!");
+                    }
+                };
+    
+                // Send ICE candidates to the server
+                pc.onicecandidate = (event) => {
+                    if (event.candidate) {
+                        console.log("❄️ ICE Candidate Sent:", event.candidate.candidate);
+                        ws.send(JSON.stringify({ candidate: event.candidate.candidate }));
+                    }
+                };
+            };
+        }
+    
+        startWebRTC();
+    </script>     
+</body>
+</html>
