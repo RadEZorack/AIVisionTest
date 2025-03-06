@@ -5,3 +5,5 @@ aiortc
 msgpack
 opencv-python
 numpy
+openai
+pillow
